@@ -2,8 +2,8 @@
   "name": "boundless-demo",
   "version": "1.0.0",
   "scripts": {
-    "build": "npx tailwindcss -i ./src/input.css -o ./src/output.css --minify",
-    "watch": "npx tailwindcss -i ./src/input.css -o ./src/output.css --watch"
+    "build": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./src/output.css --minify",
+    "watch": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./src/output.css --watch"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
