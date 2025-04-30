@@ -1,0 +1,167 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boundless Marketplace Demo</title>
+  <link href="/output.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-lg shadow-lg max-w-xl w-full text-center">
+    <h1 class="text-3xl font-bold mb-4 text-blue-600">Boundless Marketplace Demo</h1>
+    <p class="mb-4 text-gray-600">Experience the Boundless Protocol: Request compute, trade, and verify!</p>
+
+    <div class="mb-4">
+      <label for="numberInput" class="block text-lg font-medium mb-2">Enter a number (for factorial):</label>
+      <input id="numberInput" type="number" placeholder="e.g., 5" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+
+    <div class="mb-4 flex justify-center gap-4">
+      <button id="spotRequestBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">
+        Spot Request
+      </button>
+      <button id="serviceAgreementBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition">
+        Service Agreement
+      </button>
+    </div>
+
+    <div id="status" class="mt-4 text-sm text-gray-500"></div>
+    <div id="result" class="mt-4 text-lg font-medium"></div>
+    <div id="tokenBalance" class="mt-2 text-green-600">Your $ZKC: 0</div>
+    <div id="vaultBalance" class="mt-2 text-purple-600">Vault Fees: 0 ETH</div>
+
+    <canvas id="priceChart" class="mt-4 w-full h-40"></canvas>
+    <canvas id="confettiCanvas" class="absolute inset-0 pointer-events-none"></canvas>
+  </div>
+
+  <script>
+    const spotRequestBtn = document.getElementById('spotRequestBtn');
+    const serviceAgreementBtn = document.getElementById('serviceAgreementBtn');
+    const numberInput = document.getElementById('numberInput');
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    const tokenBalanceDiv = document.getElementById('tokenBalance');
+    const vaultBalanceDiv = document.getElementById('vaultBalance');
+    let tokenBalance = 0;
+    let vaultBalance = 0;
+    let proverCount = 2; // Simulate multiple provers
+
+    let chart = new Chart(document.getElementById('priceChart'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Price (ETH)', data: [], borderColor: '#3b82f6', fill: false }] },
+      options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    spotRequestBtn.addEventListener('click', async () => {
+      const number = parseInt(numberInput.value);
+      if (isNaN(number) || number < 0) {
+        resultDiv.textContent = 'Please enter a positive number!';
+        resultDiv.className = 'mt-4 text-lg font-medium text-red-500';
+        return;
+      }
+
+      resultDiv.textContent = '';
+      statusDiv.textContent = 'Starting reverse Dutch auction...';
+      spotRequestBtn.disabled = true;
+      spotRequestBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed';
+
+      let price = 0.01;
+      const maxPrice = 0.1;
+      const interval = setInterval(() => {
+        chart.data.labels.push('');
+        chart.data.datasets[0].data.push(price.toFixed(2));
+        chart.update();
+        price += 0.005;
+        statusDiv.textContent = `Current price: ${price.toFixed(2)} ETH`;
+        if (price >= maxPrice || Math.random() < 0.3 / proverCount) {
+          clearInterval(interval);
+          handleProverAcceptance(number, price);
+        }
+        if (price > 0.07 && proverCount < 4) {
+          proverCount += 1; // Simulate new provers entering due to high price
+          statusDiv.textContent += ` (New prover joined: ${proverCount} total)`;
+        }
+      }, 500);
+    });
+
+    serviceAgreementBtn.addEventListener('click', () => {
+      const number = parseInt(numberInput.value);
+      if (isNaN(number) || number < 0) {
+        resultDiv.textContent = 'Please enter a positive number!';
+        resultDiv.className = 'mt-4 text-lg font-medium text-red-500';
+        return;
+      }
+      statusDiv.textContent = 'Service agreement activated for 3 computations!';
+      resultDiv.textContent = 'Locked in at 0.05 ETH each. Use anytime this month.';
+      resultDiv.className = 'mt-4 text-lg font-medium text-green-600';
+      vaultBalance += 0.15; // 3 x 0.05 ETH fee
+      vaultBalanceDiv.textContent = `Vault Fees: ${vaultBalance.toFixed(2)} ETH`;
+      tokenBalance += 5; // Initial agreement reward
+      tokenBalanceDiv.textContent = `Your $ZKC: ${tokenBalance}`;
+      confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+    });
+
+    function handleProverAcceptance(number, price) {
+      statusDiv.textContent = `Prover accepted at ${price.toFixed(2)} ETH. Computing...`;
+      setTimeout(() => {
+        let factorial = 1;
+        for (let i = 1; i <= number; i++) factorial *= i;
+        statusDiv.textContent = 'ZK-proof verification successful!';
+        resultDiv.textContent = `${number}! = ${factorial}`;
+        resultDiv.className = 'mt-4 text-lg font-medium text-green-600';
+        const cycles = number * 100; // Mock cycles
+        const feeProportion = 0.2; // 20% market fee
+        const proverReward = (price * (1 - feeProportion)) * (cycles / (cycles + 100));
+        tokenBalance += Math.floor(proverReward * 100); // Convert to $ZKC
+        vaultBalance += price * feeProportion;
+        tokenBalanceDiv.textContent = `Your $ZKC: ${tokenBalance}`;
+        vaultBalanceDiv.textContent = `Vault Fees: ${vaultBalance.toFixed(2)} ETH`;
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        spotRequestBtn.disabled = false;
+        spotRequestBtn.className = 'bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition';
+      }, 1500);
+    }
+  </script>
+</body>
+</html>
